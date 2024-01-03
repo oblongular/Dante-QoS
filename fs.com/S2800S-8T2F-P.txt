@@ -1,0 +1,115 @@
+! System Description: S2800S-8T2F-P Switch
+! System Version: v26992
+! System Name: S2800S-8T2F-P
+! System Up Time: 0 days, 8 hours, 30 mins, 10 secs
+!
+!
+cpu-protect cpu bandwidth 500
+cpu-protect sub-interface manage pps 500
+cpu-protect sub-interface route pps 200
+cpu-protect sub-interface protocol pps 500
+username web admin password encrypted MjEyMzJmMjk3YTU3YTVhNzQzODk0YTBlNGE4MDFmYzM=
+web-login-time 14400
+web-language en
+web http port 80
+!
+!
+!
+easycwmp acs enable
+easycwmp acs periodic_enable
+easycwmp acs periodic_interval 60
+username "admin" privilege user secret encrypted MjEyMzJmMjk3YTU3YTVhNzQzODk0YTBlNGE4MDFmYzM=
+management-vlan enable
+voice-vlan oui-table 00:E0:BB:00:00:00 mask FF:FF:FF:00:00:00 "3COM"
+voice-vlan oui-table 00:03:6B:00:00:00 mask FF:FF:FF:00:00:00 "Cisco"
+voice-vlan oui-table 00:E0:75:00:00:00 mask FF:FF:FF:00:00:00 "Veritel"
+voice-vlan oui-table 00:D0:1E:00:00:00 mask FF:FF:FF:00:00:00 "Pingtel"
+voice-vlan oui-table 00:01:E3:00:00:00 mask FF:FF:FF:00:00:00 "Siemens"
+voice-vlan oui-table 00:60:B9:00:00:00 mask FF:FF:FF:00:00:00 "NEC/Philips"
+voice-vlan oui-table 00:0F:E2:00:00:00 mask FF:FF:FF:00:00:00 "Huawei-3COM"
+voice-vlan oui-table 00:09:6E:00:00:00 mask FF:FF:FF:00:00:00 "Avaya"
+!
+!
+surveillance-vlan vlan 4095
+!
+!
+!
+!
+!
+!
+!
+!
+no ip igmp snooping vlan 1 fast-leave enable
+no ipv6 mld snooping vlan 1 fast-leave enable
+!
+!
+snmp community "private"  rw
+snmp community "public"  ro
+!
+!
+!
+!
+!
+ip telnet
+ip ssh
+ip ssh v1
+ip ssh v2
+ip http
+ip https
+!
+qos trust dscp
+dhcp-snooping vlan 1-4094
+arp-inspection vlan 1-4094
+!
+!
+!
+!
+interface gi0/1
+ poe max-power 35
+ poe alloc-power 35
+!
+interface gi0/2
+ poe max-power 35
+ poe alloc-power 35
+!
+interface gi0/3
+ poe max-power 35
+ poe alloc-power 0
+!
+interface gi0/4
+ poe max-power 35
+ poe alloc-power 0
+!
+interface gi0/5
+ poe max-power 35
+ poe alloc-power 0
+!
+interface gi0/6
+ poe max-power 35
+ poe alloc-power 0
+!
+interface gi0/7
+ poe max-power 35
+ poe alloc-power 0
+!
+interface gi0/8
+ poe max-power 35
+ poe alloc-power 0
+!
+interface gi0/9
+!
+interface gi0/10
+!
+!
+!
+!
+interface vlan 1
+ ip address 192.168.1.1 mask 255.255.255.0
+ip default-gateway 192.168.1.254
+ip dhcpserver gate-way 192.168.1.254
+ip dhcpserver pool 192.168.1.11-192.168.1.200
+ip dhcpserver mask 255.255.255.0
+ip dhcpserver major 8.8.8.8
+ip dhcpserver minor 0.0.0.0
+ip dhcpserver leasetime 1200
+!

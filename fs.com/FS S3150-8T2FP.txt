@@ -1,0 +1,96 @@
+!
+!version 2.2.0D build 79995
+service timestamps log date
+service timestamps debug date
+!
+!
+hostname FS-Switch
+!
+!
+!
+!
+spanning-tree mode rstp
+!
+!
+!
+!
+!
+!
+qos trust dscp
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+aaa authentication login default local
+aaa authentication enable default none
+aaa authorization exec default local
+!
+username admin password 0 admin
+!
+!
+!
+!
+!
+interface Null0
+!
+interface GigaEthernet0/1
+!
+interface GigaEthernet0/2
+!
+interface GigaEthernet0/3
+!
+interface GigaEthernet0/4
+!
+interface GigaEthernet0/5
+!
+interface GigaEthernet0/6
+!
+interface GigaEthernet0/7
+!
+interface GigaEthernet0/8
+!
+interface GigaEthernet0/9
+!
+interface GigaEthernet0/10
+!
+interface VLAN1
+ ip address dhcp
+ no ip directed-broadcast
+!
+!
+!
+vlan 1
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+ip exf
+!
+ipv6 exf
+!
+!
+ip http language english
+ip http server
+!
+!
+!
+!
+ip sshd enable
+!
+!
+!
+!
+!

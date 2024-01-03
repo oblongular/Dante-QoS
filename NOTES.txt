@@ -1,0 +1,7 @@
+Things to note
+
+For QoS:
+  1) Configure the switch/port to "trust" the DSCP values in the packets
+  2) Check the mapping from DSCP value to priority value - internal (often 0-7)
+  3) Check the mapping from priority value to Queue
+  4) Check that the queues are strict priority - WRR is not desirable

@@ -1,0 +1,20 @@
+
+References:
+https://img-en.fs.com/file/user_manual/poe+-series-switches-cli-reference-guide.pdf
+
+Incredibly, this is only configuration that is needed:
+qos trust dscp
+
+You can configure the queue policy with:
+  - scheduler policy sp|wrr|..
+
+FS-Switch#show dscp map
+dscp map 0-7 cos 0
+dscp map 8-15 cos 1
+dscp map 16-23 cos 2
+dscp map 24-31 cos 3
+dscp map 32-39 cos 4
+dscp map 40-47 cos 5
+dscp map 48-55 cos 6
+dscp map 56-63 cos 7
+
