@@ -8,37 +8,24 @@
 #  -   sfpN: untagged vlan98 management network only
 #
 
-/system/identity/set name=Dante-QoS-VLAN
-/tool/romon/set enabled=yes
+# configuration for this script comes from a global variable
+:global cfg
 
-:global cfg {
-    "MGMT"={
-        "pvid"=98;
-        "first"="sfp-sfpplus1";
-        "last"="sfp-sfpplus1";
-        "add-tagged-to-others"=true;
+#
+#  check that the global configuration variable exists ...
+#
+:local checkConfigExists do={
+    :global cfg
+    :local returnStatus true
+
+    :if ([:typeof $cfg] != "array") do={
+        :put "ERROR: no configuration defined"
+        :put "ERROR: did you forget to /import your configuration file?"
+        :set returnStatus false
     }
-    "TRUNK"={
-        "first"="sfp-sfpplus3";
-        "last"="sfp-sfpplus4";
-    }
-    "dante-primary"={
-        "pvid"=22;
-        "first"="ether1";
-        "last"="ether8"
-    };
-    "dante-secondary"={
-        "pvid"=23;
-        "first"="ether9";
-        "last"="ether16";
-    };
-    "dmx-lighting"={
-        "pvid"=50;
-        "first"="ether17";
-        "last"="ether24";
-    };
+
+    :return $returnStatus
 }
-
 
 #
 #  check we're configuring a supported switch
@@ -87,6 +74,7 @@
 #  check for some basic misconfiguration in the config
 #
 :local buildIfList do={
+
     :global cfg
     :local returnStatus true
     :local allEtherNames [:toarray ""]
@@ -122,21 +110,27 @@
             :if ([:typeof ($cfg->"TRUNK"->"pvid")] != "nothing") do={
                 :if (($cfg->"TRUNK"->"pvid") != 1) do={
                     :put "ERROR: 'TRUNK' should not include a pvid (default pvid=1 will be used)"
-                    :return false
+                    :set returnStatus false
                 }
             }
             :set ($cfg->"TRUNK"->"pvid") 1
         }
 
+        :put ("  -> pvid=" . ($cfg->$netName->"pvid"))
         :if ($ifirst >= 0 && $ilast >= 0 && $ilast >= $ifirst) do={
-            :put ("  -> pvid=" . ($cfg->$netName->"pvid"))
             :put ("  -> _if_list[$ifirst..$ilast]")
             :set ($cfg->$netName->"_if_list") \
                 [:pick $allEtherNames $ifirst (1+$ilast)]
-            :put ("  -> " . [:tostr ($cfg->$netName->"_if_list")])
+            :put ("  -> untagged[" . [:tostr ($cfg->$netName->"_if_list")] . "]")
         } else={
-            :put ("\n### ERROR: bad config for '$netName': '" . $netCfg->"first" . "' or '" . $netCfg->"last" . "' cannot be found or are out of order")
-            :set returnStatus false
+            :if (($netCfg->"first" = "TAGGED-ONLY") && ($netCfg->"last" = "TAGGED-ONLY")) do={
+                # no untagged/pvid ports for this VLAN
+                :put ("  -> TAGGED-ONLY")
+                :set ($cfg->$netName->"_if_list") [:toarray ""]
+            } else={
+                :put ("\n### ERROR: bad config for '$netName': '" . $netCfg->"first" . "' or '" . $netCfg->"last" . "' cannot be found or are out of order")
+                :set returnStatus false
+            }
         }
 
         # check for re-use of vlan-ids
@@ -163,7 +157,8 @@
     :return $returnStatus
 }
 
-:if ([$supportedModel] && [$waitForInterfaces] && [$buildIfList]) do={
+
+:if ([$checkConfigExists] && [$supportedModel] && [$waitForInterfaces] && [$buildIfList]) do={
 
     :local mgmtVID ($cfg->"MGMT"->"pvid")
 
@@ -192,8 +187,6 @@
 
     /interface bridge vlan
     {
-        :global cfg
-
         :foreach netName,netCfg in $cfg do={
             :local taggedPorts [:toarray ""]
 
@@ -221,11 +214,12 @@
 
         :foreach netName,netCfg in $cfg do={
             :if ($netName != "TRUNK") do={
-                add bridge=bridge1 untagged=($netCfg->"_if_list") tagged=($cfg->$netName->"_tagged_ports") vlan-ids=($netCfg->"pvid")
+                add bridge=bridge1 tagged=($cfg->$netName->"_tagged_ports") vlan-ids=($netCfg->"pvid")
             }
         }
         
-        # let the user manually enable vlan-filtering!
+        :put "\nEnabling VLAN filtering (will likely disconnect winbox)"
+        /interface/bridge/set bridge1 vlan-filtering=yes ingress-filtering=yes
     }
 
     {
@@ -264,6 +258,4 @@
     }
 
     :put "\nAll done."
-    :put "\nRun this to enable VLAN filtering (will likely disconnect winbox):"
-    :put "\n  /interface/bridge/set bridge1 vlan-filtering=yes"
 }
