@@ -73,6 +73,8 @@
 #  convert the cfg structure into readily useable interface lists
 #  check for some basic misconfiguration in the config
 #
+#  RESULT: hangs lists of tagged/untagged interface names off each net cfg
+#
 :local buildIfList do={
 
     :global cfg
@@ -95,7 +97,7 @@
         :local ifirst -1
         :local ilast -1
 
-        :put "\nNetwork '$netName':"
+        :put "Checking config '$netName'"
         :for i from=0 to=([:len $allEtherNames]-1) step=1 do={
             :local n ($allEtherNames->$i)
             :if ($n = $netCfg->"first") do={
@@ -116,16 +118,14 @@
             :set ($cfg->"TRUNK"->"pvid") 1
         }
 
-        :put ("  -> pvid=" . ($cfg->$netName->"pvid"))
         :if ($ifirst >= 0 && $ilast >= 0 && $ilast >= $ifirst) do={
-            :put ("  -> _if_list[$ifirst..$ilast]")
+            #:put ("  -> _if_list[$ifirst..$ilast]")
             :set ($cfg->$netName->"_if_list") \
                 [:pick $allEtherNames $ifirst (1+$ilast)]
-            :put ("  -> untagged[" . [:tostr ($cfg->$netName->"_if_list")] . "]")
         } else={
             :if (($netCfg->"first" = "TAGGED-ONLY") && ($netCfg->"last" = "TAGGED-ONLY")) do={
                 # no untagged/pvid ports for this VLAN
-                :put ("  -> TAGGED-ONLY")
+                #:put ("  -> TAGGED-ONLY")
                 :set ($cfg->$netName->"_if_list") [:toarray ""]
             } else={
                 :put ("\n### ERROR: bad config for '$netName': '" . $netCfg->"first" . "' or '" . $netCfg->"last" . "' cannot be found or are out of order")
@@ -152,6 +152,40 @@
                 :set returnStatus false
             }
         }
+    }
+
+    :foreach netName,netCfg in $cfg do={
+        :local taggedPorts [:toarray ""]
+
+        :if ($netName != "TRUNK") do={
+            # trunk ports carry this VLAN tagged (by definition)
+            :set taggedPorts ($cfg->"TRUNK"->"_if_list")
+
+            # mgmt network is a special case, it goes tagged to the switch-cpu port
+            :if ($netName = "MGMT") do={
+                :if ([/system/routerboard/get model] ~ "^CRS[12]") do={
+                   :set taggedPorts ("switch1-cpu", $taggedPorts)
+                } else={
+                   :set taggedPorts ("bridge1", $taggedPorts)
+                }
+            }
+
+            # non-trunk ports can carry this VLAN tagged, if specified
+            :foreach otherName,otherCfg in $cfg do={
+                :if (($otherName != $netName) and ($otherName != "TRUNK")) do={
+                    :if ($netCfg->"add-tagged-to-others") do={
+                        :set taggedPorts ($taggedPorts, $otherCfg->"_if_list")
+                    }
+                }
+            }
+
+            :set ($cfg->$netName->"_tagged_ports") $taggedPorts
+        }
+
+        :put "\nNetwork '$netName':"
+        :put ("  -> pvid=" . ($cfg->$netName->"pvid"))
+        :put ("  -> untagged[" . [:tostr ($cfg->$netName->"_if_list")] . "]")
+        :put ("  -> tagged[" . [:tostr ($cfg->$netName->"_tagged_ports")] . "]")
     }
 
     :return $returnStatus
@@ -187,31 +221,6 @@
 
     /interface bridge vlan
     {
-        :foreach netName,netCfg in $cfg do={
-            :local taggedPorts [:toarray ""]
-
-            :if ($netName != "TRUNK") do={
-                # trunk ports carry this VLAN tagged (by definition)
-                :set taggedPorts ($cfg->"TRUNK"->"_if_list")
-
-                # mgmt network is a special case, it goes tagged to the switch-cpu port
-                :if ($netName = "MGMT") do={
-                    :set taggedPorts ("bridge1", $taggedPorts)
-                }
-
-                # non-trunk ports can carry this VLAN tagged, if specified
-                :foreach otherName,otherCfg in $cfg do={
-                    :if (($otherName != $netName) and ($otherName != "TRUNK")) do={
-                        :if ($netCfg->"add-tagged-to-others") do={
-                            :set taggedPorts ($taggedPorts, $otherCfg->"_if_list")
-                        }
-                    }
-                }
-
-                :set ($cfg->$netName->"_tagged_ports") $taggedPorts
-            }
-        }
-
         :foreach netName,netCfg in $cfg do={
             :if ($netName != "TRUNK") do={
                 add bridge=bridge1 tagged=($cfg->$netName->"_tagged_ports") vlan-ids=($netCfg->"pvid")

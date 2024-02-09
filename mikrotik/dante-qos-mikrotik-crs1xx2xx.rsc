@@ -1,11 +1,30 @@
 
-:global danteVID 22
-:global mgmtVID  98
+#
+#  Configuration for this script comes from a global variable
+#  You should not to modify this script.
+#
+:global cfg
 
-/system/identity/set name=Dante-PoE-QoS
-/tool/romon/set enabled=yes
+#
+#  check that the global configuration variable exists ...
+#
+:local checkConfigExists do={
+    :global cfg
+    :local returnStatus true
 
-:global supportedModel do={
+    :if ([:typeof $cfg] != "array") do={
+        :put "ERROR: no configuration defined"
+        :put "ERROR: did you forget to /import your configuration file?"
+        :set returnStatus false
+    }
+
+    :return $returnStatus
+}
+
+#
+#  check we're configuring a supported switch
+#
+:local supportedModel do={
     :local model [/system/routerboard/get model]
     :local supported ($model~"^CRS[12]")
     :if (!$supported) do={
@@ -15,9 +34,10 @@
 }
 
 #
-#  sigh, this used to be necessary in the past ..
+#  wait for interfaces to appear
+#  (this used to be necessary at boot time..)
 #
-:global waitForInterfaces do={
+:local waitForInterfaces do={
     :local i 0
     :local found false
     :do {
@@ -26,55 +46,142 @@
             :set i ($i+1)
             :log info message="Waiting for interfaces ... $i"
             :delay 1s
-        } else= {
+        } else={
             :log info message="Interfaces available"
         }
     } while (i<20 && !$found)
     :return $found
 }
 
-:if ([$supportedModel] && [$waitForInterfaces]) do={
+#
+#  convert the cfg structure into readily useable interface lists
+#  check for some basic misconfiguration in the config
+#
+#  RESULT: hangs lists of tagged/untagged interface names off each net cfg
+#
+:local buildIfList do={
 
-    #
-    #  Build default lists of ethernet and sfp interface names
-    #
-    #  The typical default Mikrotik config bridges traffic to the switch CPU,
-    #  which is not very powerful and can get overloaded from Dante multicast.
-    #  If you're load testing with multicast, the switch CPU hits 100% PDQ.
-    #
-    #  We use VLANs to keep multicast from hitting the switch CPU, something like:
-    #  - etherN: untagged vlan22 Dante network, mgmt vlan98 tagged
-    #  -   sfpN: untagged vlan98 management network only
-    #
-    :global ethNames [:toarray ""]
-    :global sfpNames [:toarray ""]
-    {
-        :local i nil
-        :foreach i in [/interface ethernet find where default-name~"^ether"] do={
-            :set ethNames ($ethNames, [/interface ethernet get $i default-name])
-        }
-        :foreach i in [/interface ethernet find where default-name~"^sfp"] do={
-            :set sfpNames ($sfpNames, [/interface ethernet get $i default-name])
-        }
-        #/environment print
+    :global cfg
+    :local returnStatus true
+    :local allEtherNames [:toarray ""]
+    :local chkVIDs [:toarray ""]
+    :local chkIntfs [:toarray ""]
+
+    :if (([:typeof ($cfg->"MGMT"->"pvid")]) != "num") do={
+        :put "ERROR: 'MGMT' network with at least one port/pvid is required"
+        :put "ERROR: connect to this port with a computer to run Winbox"
+        :return false
     }
 
-    ##
-    ##  Optionally override the above defaults if you don't like them
-    ##
-    #:global danteNames [:toarray "ether3,ether4,ether5"]
-    #:global mgmtNames [:toarray "sfp9"]
-    :global danteNames ($ethNames)
-    :global mgmtNames  ($sfpNames)
+    :foreach i in [/interface/ethernet find] do={
+        :set $allEtherNames ($allEtherNames, [/interface/ethernet/get $i default-name])
+    }
 
-    /interface bridge add name=bridge1
-    /interface bridge port
-    {
-        :local ifName nil
-        :foreach ifName in ($danteNames,$mgmtNames) do={
-            add bridge=bridge1 interface=$ifName hw=yes
+    :foreach netName,netCfg in $cfg do={
+        :local ifirst -1
+        :local ilast -1
+
+        :put "Checking config '$netName'"
+        :for i from=0 to=([:len $allEtherNames]-1) step=1 do={
+            :local n ($allEtherNames->$i)
+            :if ($n = $netCfg->"first") do={
+                :set ifirst $i
+            }
+            :if ($n = $netCfg->"last") do={
+                :set ilast $i
+            }
+        }
+
+        :if ($netName = "TRUNK") do={
+            :if ([:typeof ($cfg->"TRUNK"->"pvid")] != "nothing") do={
+                :if (($cfg->"TRUNK"->"pvid") != 1) do={
+                    :put "ERROR: 'TRUNK' should not include a pvid (default pvid=1 will be used)"
+                    :set returnStatus false
+                }
+            }
+            :set ($cfg->"TRUNK"->"pvid") 1
+        }
+
+        :if ($ifirst >= 0 && $ilast >= 0 && $ilast >= $ifirst) do={
+            #:put ("  -> _if_list[$ifirst..$ilast]")
+            :set ($cfg->$netName->"_if_list") \
+                [:pick $allEtherNames $ifirst (1+$ilast)]
+        } else={
+            :if (($netCfg->"first" = "TAGGED-ONLY") && ($netCfg->"last" = "TAGGED-ONLY")) do={
+                # no untagged/pvid ports for this VLAN
+                #:put ("  -> TAGGED-ONLY")
+                :set ($cfg->$netName->"_if_list") [:toarray ""]
+            } else={
+                :put ("\n### ERROR: bad config for '$netName': '" . $netCfg->"first" . "' or '" . $netCfg->"last" . "' cannot be found or are out of order")
+                :set returnStatus false
+            }
+        }
+
+        # check for re-use of vlan-ids
+        :local vidStr [:tostr ($cfg->$netName->"pvid")]
+        :set ($chkVIDs->$vidStr) (1 + ($chkVIDs->$vidStr))
+        :foreach v,c in $chkVIDs do={
+            :if ($c > 1) do={
+                :put "ERROR: pvid=$v appears more than once in cfg"
+                :set returnStatus false
+            }
+        }
+        # check for re-use of interface names
+        :foreach i in=($cfg->$netName->"_if_list") do={
+            :set ($chkIntfs->$i) (1 + ($chkIntfs->$i))
+        }
+        :foreach i,c in $chkIntfs do={
+            :if ($c > 1) do={
+                :put "ERROR: $i appears more than once in cfg"
+                :set returnStatus false
+            }
         }
     }
+
+    :foreach netName,netCfg in $cfg do={
+        :local taggedPorts [:toarray ""]
+
+        :if ($netName != "TRUNK") do={
+            # trunk ports carry this VLAN tagged (by definition)
+            :set taggedPorts ($cfg->"TRUNK"->"_if_list")
+
+            # mgmt network is a special case, it goes tagged to the switch-cpu port
+            :if ($netName = "MGMT") do={
+                :if ([/system/routerboard/get model] ~ "^CRS[12]") do={
+                   :set taggedPorts ("switch1-cpu", $taggedPorts)
+                } else={
+                   :set taggedPorts ("bridge1", $taggedPorts)
+                }
+            }
+
+            # non-trunk ports can carry this VLAN tagged, if specified
+            :foreach otherName,otherCfg in $cfg do={
+                :if (($otherName != $netName) and ($otherName != "TRUNK")) do={
+                    :if ($netCfg->"add-tagged-to-others") do={
+                        :set taggedPorts ($taggedPorts, $otherCfg->"_if_list")
+                    }
+                }
+            }
+
+            :set ($cfg->$netName->"_tagged_ports") $taggedPorts
+        }
+
+        :put "\nNetwork '$netName':"
+        :put ("  -> pvid=" . ($cfg->$netName->"pvid"))
+        :put ("  -> untagged[" . [:tostr ($cfg->$netName->"_if_list")] . "]")
+        :put ("  -> tagged[" . [:tostr ($cfg->$netName->"_tagged_ports")] . "]")
+    }
+
+    :return $returnStatus
+}
+
+
+:if ([$checkConfigExists] && [$supportedModel] && [$waitForInterfaces] && [$buildIfList]) do={
+
+    :local mgmtVID ($cfg->"MGMT"->"pvid")
+
+    /interface bridge
+    add name=bridge1 frame-types=admit-only-vlan-tagged
 
     /interface vlan
     add interface=bridge1 name="MGMT-vlan$mgmtVID" vlan-id=$mgmtVID
@@ -84,39 +191,63 @@
     #
     #  VLAN configuration - defend the switch CPU from multicast!
     #
-    # ingress - map untagged (i.e. VLAN=0) received packets to VLANs
-    /interface ethernet switch ingress-vlan-translation
-    add customer-vid=0 new-customer-vid=$danteVID ports=$danteNames
-    add customer-vid=0 new-customer-vid=$mgmtVID ports=$mgmtNames
-    # port VLAN membership
-    /interface ethernet switch vlan
-    add ports=$danteNames vlan-id=$danteVID
-    add ports=($danteNames,$mgmtNames,"switch1-cpu") vlan-id=$mgmtVID
-    # egress - remove/keep VLAN tags as necessary
-    # Note: untagged vlan-id=$danteVID ports need an entry!
-    /interface ethernet switch egress-vlan-tag
-    add vlan-id=$danteVID
-    add tagged-ports=("switch1-cpu",$danteNames) vlan-id=$mgmtVID
+    :put "\nVLAN configuration starting ..."
 
-    /interface ethernet switch
-    set drop-if-invalid-or-src-port-not-member-of-vlan-on-ports=("switch1-cpu", $danteNames,$mgmtNames)
-
-    #
-    #  Dante QoS configuration
-    #
-    /interface ethernet switch dscp-qos-map
-    set 8 priority=4
-    set 46 priority=5
-    set 56 priority=6
-
-    /interface ethernet switch port
+    /interface bridge port
     {
-        :local ifName nil
-        :foreach ifName in ($danteNames) do={
-            :log info message=("Applying Dante QoS to: " . $ifName)
-            set $ifName per-queue-scheduling="strict-priority:0,strict-priority:0,strict-priority:0,strict-priority:0,strict-priority:0,strict-priority:0,strict-priority:0,strict-priority:0"
-            set $ifName priority-to-queue=0:0,1:1,2:2,3:3,4:4,5:5,6:6,7:7
-            set $ifName qos-scheme-precedence=dscp-based
+        :foreach netName,netCfg in $cfg do={
+            :local vlanID ($netCfg->"pvid")
+            :foreach ifName in ($netCfg->"_if_list") do={
+                :put "$netName: $ifName pvid=$vlanID"
+                add bridge=bridge1 interface=$ifName pvid=$vlanID frame-types=admit-all hw=yes
+            }
         }
     }
+
+    # VLAN: ingress - map untagged (i.e. VLAN=0) received packets to VLANs
+    /interface ethernet switch ingress-vlan-translation
+    {
+        :foreach netName,netCfg in $cfg do={
+            :local vlanID ($netCfg->"pvid")
+            :local untaggedPorts ($netCfg->"_if_list")
+
+            :if ([:len $untaggedPorts] > 0) do={
+                add customer-vid=0 new-customer-vid=$vlanID ports=$untaggedPorts
+            }
+        }
+    }
+
+    # VLAN: port VLAN membership
+    /interface ethernet switch vlan
+    {
+        :foreach netName,netCfg in $cfg do={
+            :local vlanID ($netCfg->"pvid")
+            :local untaggedPorts ($netCfg->"_if_list")
+            :local taggedPorts ($netCfg->"_tagged_ports")
+
+            add ports=($taggedPorts,$untaggedPorts) vlan-id=$vlanID
+        }
+    }
+
+    # VLAN: egress - remove/keep VLAN tags as necessary
+    /interface ethernet switch egress-vlan-tag
+    {
+        :foreach netName,netCfg in $cfg do={
+            :local vlanID ($netCfg->"pvid")
+            :local taggedPorts ($netCfg->"_tagged_ports")
+
+            :if ([:len $taggedPorts] > 0) do={
+                add tagged-ports=$taggedPorts vlan-id=$vlanID
+            } else={
+                # untagged ports also need an entry (membership is not enough!)
+                add vlan-id=$vlanID
+            }
+        }
+    }
+
+    # VLAN: enable filtering on all ports...
+    /interface ethernet switch
+    set drop-if-invalid-or-src-port-not-member-of-vlan-on-ports [port/find]
+
+    :put "\nAll done."
 }
