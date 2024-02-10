@@ -1,31 +1,28 @@
-{
-    :local s [/system/routerboard/get serial-number]
-    :local n "Dante-QoS-VLAN"
-    :if ($s = "HEG08HS7MZ3")  do={ :set n "PoE8-Printer"     }
-    :if ($s = "HEG08GETNAW")  do={ :set n "PoE8-TestDevice"  }
-    :if ($s = "D2610C8BA260") do={ :set n "PoE8-AudioRoom"   }
-    
-    /system/identity/set name=$n
-    /tool/romon/set enabled=yes
-}
+/system/identity/set name=Dante-QV-eg8
+/tool/romon/set enabled=yes
 
 :global cfg {
-    "home"={
-        "pvid"=22;
+    "MGMT"={
+        "pvid"=98;
         "first"="ether1";
+        "last"="ether1";
+        "add-tagged-to-others"=true;
+    }
+    "comms"={
+        "pvid"=20;
+        "first"="ether2";
+        "last"="ether2";
+    }
+    "dante_primary"={
+        "pvid"=22;
+        "first"="ether3";
         "last"="ether8";
     }
     "TRUNK"={
         "first"="sfp9";
         "last"="sfp12";
     }
-    "MGMT"={
-        "pvid"=98;
-        "first"="TAGGED-ONLY";
-        "last"="TAGGED-ONLY";
-        "add-tagged-to-others"=true;
-    }
-    "iot"={
+    "internet"={
         "pvid"=100;
         "first"="TAGGED-ONLY";
         "last"="TAGGED-ONLY";

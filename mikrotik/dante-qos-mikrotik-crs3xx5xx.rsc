@@ -19,8 +19,8 @@
     :local returnStatus true
 
     :if ([:typeof $cfg] != "array") do={
-        :put "ERROR: no configuration defined"
-        :put "ERROR: did you forget to /import your configuration file?"
+        :put "### ERROR: no configuration defined"
+        :put "### ERROR: did you forget to /import your configuration file?"
         :set returnStatus false
     }
 
@@ -84,8 +84,8 @@
     :local chkIntfs [:toarray ""]
 
     :if (([:typeof ($cfg->"MGMT"->"pvid")]) != "num") do={
-        :put "ERROR: 'MGMT' network with at least one port/pvid is required"
-        :put "ERROR: connect to this port with a computer to run Winbox"
+        :put "### ERROR: 'MGMT' network with at least one port/pvid is required"
+        :put "### ERROR: connect to this port with a computer to run Winbox"
         :return false
     }
 
@@ -111,7 +111,7 @@
         :if ($netName = "TRUNK") do={
             :if ([:typeof ($cfg->"TRUNK"->"pvid")] != "nothing") do={
                 :if (($cfg->"TRUNK"->"pvid") != 1) do={
-                    :put "ERROR: 'TRUNK' should not include a pvid (default pvid=1 will be used)"
+                    :put "### ERROR: 'TRUNK' should not include a pvid (default pvid=1 will be used)"
                     :set returnStatus false
                 }
             }
@@ -138,7 +138,7 @@
         :set ($chkVIDs->$vidStr) (1 + ($chkVIDs->$vidStr))
         :foreach v,c in $chkVIDs do={
             :if ($c > 1) do={
-                :put "ERROR: pvid=$v appears more than once in cfg"
+                :put "### ERROR: pvid=$v appears more than once in cfg"
                 :set returnStatus false
             }
         }
@@ -148,7 +148,7 @@
         }
         :foreach i,c in $chkIntfs do={
             :if ($c > 1) do={
-                :put "ERROR: $i appears more than once in cfg"
+                :put "### ERROR: $i appears more than once in cfg"
                 :set returnStatus false
             }
         }
@@ -182,10 +182,13 @@
             :set ($cfg->$netName->"_tagged_ports") $taggedPorts
         }
 
-        :put "\nNetwork '$netName':"
-        :put ("  -> pvid=" . ($cfg->$netName->"pvid"))
-        :put ("  -> untagged[" . [:tostr ($cfg->$netName->"_if_list")] . "]")
-        :put ("  -> tagged[" . [:tostr ($cfg->$netName->"_tagged_ports")] . "]")
+        # highlight errors by supressing the "results summary"
+        :if ($returnStatus) do={
+            :put "\nNetwork '$netName':"
+            :put ("  -> pvid=" . ($cfg->$netName->"pvid"))
+            :put ("  -> untagged[" . [:tostr ($cfg->$netName->"_if_list")] . "]")
+            :put ("  -> tagged[" . [:tostr ($cfg->$netName->"_tagged_ports")] . "]")
+        }
     }
 
     :return $returnStatus
