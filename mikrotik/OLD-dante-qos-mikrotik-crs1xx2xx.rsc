@@ -112,7 +112,7 @@
     /interface ethernet switch port
     {
         :local ifName nil
-        :foreach ifName in ($danteNames) do={
+        :foreach ifName in ($danteNames, $mgmtNames) do={
             :log info message=("Applying Dante QoS to: " . $ifName)
             set $ifName per-queue-scheduling="strict-priority:0,strict-priority:0,strict-priority:0,strict-priority:0,strict-priority:0,strict-priority:0,strict-priority:0,strict-priority:0"
             set $ifName priority-to-queue=0:0,1:1,2:2,3:3,4:4,5:5,6:6,7:7
