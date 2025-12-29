@@ -26,13 +26,13 @@
         "pvid"=98;
         "first"="TAGGED-ONLY";
         "last"="TAGGED-ONLY";
-        "add-tagged-to-others"=true;
+        "add-tagged-to-edge-ports"=true;
     }
     "iot"={
         "pvid"=100;
         "first"="TAGGED-ONLY";
         "last"="TAGGED-ONLY";
-        "add-tagged-to-others"=true;
+        "add-tagged-to-edge-ports"=true;
     }
 }
 

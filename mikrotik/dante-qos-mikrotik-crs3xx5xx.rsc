@@ -173,7 +173,7 @@
             # non-trunk ports can carry this VLAN tagged, if specified
             :foreach otherName,otherCfg in $cfg do={
                 :if (($otherName != $netName) and ($otherName != "TRUNK")) do={
-                    :if ($netCfg->"add-tagged-to-others") do={
+                    :if ($netCfg->"add-tagged-to-edge-ports") do={
                         :set taggedPorts ($taggedPorts, $otherCfg->"_if_list")
                     }
                 }

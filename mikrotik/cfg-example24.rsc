@@ -6,7 +6,7 @@
         "pvid"=98;
         "first"="ether1";
         "last"="ether1";
-        "add-tagged-to-others"=true;
+        "add-tagged-to-edge-ports"=true;
     }
     "comms"={
         "pvid"=20;
@@ -31,7 +31,7 @@
         "pvid"=100;
         "first"="TAGGED-ONLY";
         "last"="TAGGED-ONLY";
-        "add-tagged-to-others"=true;
+        "add-tagged-to-edge-ports"=true;
     }
 }
 
