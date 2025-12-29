@@ -195,7 +195,7 @@
 }
 
 
-:if ([$checkConfigExists] && [$supportedModel] && [$waitForInterfaces] && [$buildIfList]) do={
+:if ([$checkConfigExists] && [$waitForInterfaces] && [$buildIfList]) do={
 
     :local mgmtVID ($cfg->"MGMT"->"pvid")
 
@@ -226,7 +226,11 @@
     {
         :foreach netName,netCfg in $cfg do={
             :if ($netName != "TRUNK") do={
-                add bridge=bridge1 tagged=($cfg->$netName->"_tagged_ports") vlan-ids=($netCfg->"pvid")
+                :local taggedPorts ($netCfg->"_tagged_ports")
+                :local vlanID ($netCfg->"pvid")
+                :if ([:len $taggedPorts] > 0) do={
+                    add bridge=bridge1 tagged=$taggedPorts vlan-ids=$vlanID
+                }
             }
         }
         
@@ -234,7 +238,7 @@
         /interface/bridge/set bridge1 vlan-filtering=yes ingress-filtering=yes
     }
 
-    {
+    :if ([$supportedModel]) do={
         :put "\nQoS configuration starting ..."
         #
         #  Dante QoS configuration
@@ -246,27 +250,30 @@
         #  Check /interface/ethernet/switch/qos/tx-manager/queue/print
         #  /interface/ethernet/switch/qos/port> print stats where name=ether2
         #
-        /interface ethernet switch qos profile
-        add dscp=46 name=dante-audio traffic-class=5
-        add dscp=56 name=dante-ptp traffic-class=6
+        :local qosScript "
+            /interface ethernet switch qos profile
+            add dscp=46 name=dante-audio traffic-class=5
+            add dscp=56 name=dante-ptp traffic-class=6
 
-        /interface ethernet switch qos map ip
-        add dscp=46 profile=dante-audio
-        add dscp=47 profile=default
-        add dscp=56 profile=dante-ptp
-        add dscp=57 profile=default
+            /interface ethernet switch qos map ip
+            add dscp=46 profile=dante-audio
+            add dscp=47 profile=default
+            add dscp=56 profile=dante-ptp
+            add dscp=57 profile=default
 
-        # don't be too clever - trust DSCP on all ports
-        /interface ethernet switch qos port
-        {
-            :foreach i in [find where profile] do={
-                :put ([get number=$i name] . " --> trust DSCP/keep")
-                set $i trust-l3=keep
+            # don't be too clever - trust DSCP on all ports
+            /interface ethernet switch qos port
+            {
+                :foreach i in [find where profile] do={
+                    :put ([get number=\$i name] . \" --> trust DSCP/keep\")
+                    set \$i trust-l3=keep
+                }
             }
-        }
 
-        /interface ethernet switch
-        set switch1 qos-hw-offloading=yes
+            /interface ethernet switch
+            set switch1 qos-hw-offloading=yes
+        "
+        [:parse $qosScript]
     }
 
     :put "\nAll done."
