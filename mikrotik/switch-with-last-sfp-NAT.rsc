@@ -1,4 +1,24 @@
-# handy: /system/reset-configuration keep-users=yes no-defaults=yes
+#
+#  This config creates a private network:
+#    - All ethernet and SFP ports (except for the last SFP port)
+#      are bridged into a single L2 network.
+#    - A DHCP server is provided for the L2 network.
+#    - The *last SFP port* is used for upstream NAT and
+#      is not part of the L2 network.
+#
+#  NOTE: most switches are _not_ high performance routers
+#        The router/NAT functions are usually done in _software_.
+#
+#  NOTE: there is limited (i.e. no) firewalling in this configuration,
+#        it is not suitable as a border gateway to the wider internet.
+#
+#  Therefore:
+#    1) switched L2 network will be fast,
+#    2) routed NAT / internet connectivity will not be so fast
+#
+#  Apply with something like this:
+#  /system/reset-configuration keep-users=yes no-defaults=yes run-after-reset=flash/switch-with-last-sfp-NAT.rsc
+#
 
 /system identity
 set name=L2-switch-with-NAT
